@@ -8,9 +8,12 @@ import requests
 import csv
 import logging
 import json
+import time
+
 
 # Initializes logging file.
 logging.basicConfig(filename='sherdog.log', level=logging.INFO, format='%(asctime)s:%(levelname)s:%(message)s')
+allfighters = {'fighters' : []}
 
 
 class Fighter(object):
@@ -23,6 +26,17 @@ class Fighter(object):
         """
         self.url = None
         self.name = None  # str: fighter's name, None by default
+        self.nickName = None
+        self.birth_date = None
+        self.height = None
+        self.weight = None
+        self.locality = None
+        self.association = None
+        self.weight_class = None
+        self.wins = None
+        self.losses = None
+        self.draws = 0  # default is 0, not None because of the site layout being dynamic
+        self.no_contests = 0 # default is 0, not None because of the site layout being dynamic
         self.resource = None  # setting up resource based on url, None by default
         self.soup = None  # creating BeautifulSoup object, None by default
         self.pro_range = None  # selector: selecting range to pro fights exclusively, None by default
@@ -83,7 +97,7 @@ class Fighter(object):
             if line.div.h2.get_text() == 'Fight History - Pro':
                 pro_fights = line
                 self.pro_range = pro_fights
-
+    
     def set_name(self):
         """
         Collects and sets name for Fighter instance.
@@ -92,6 +106,112 @@ class Fighter(object):
         name = self.soup.find('span', class_='fn')
         try:
             self.name = name.get_text()
+        except AttributeError:
+            return AttributeError
+    
+    def set_nick_name(self):
+        """
+        Collects and sets nick_name for Fighter instance.
+        :return: sets self.nick_name to scraped string with fighter's nickname, returns AttributeError in case none was found
+        """
+        nick_name = self.soup.find('span', class_='nickname')
+        try:
+            self.nickName = nick_name.get_text()
+        except AttributeError:
+            return AttributeError
+
+    def set_birth_date(self):
+        """
+        Collects and sets birth_date for Fighter instance.
+        :return: sets self.birth_date to scraped string with fighter's birthdate in ISO 8601 format, returns AttributeError in case none was found
+        """
+        birth_date = self.soup.find('span', itemprop='birthDate')
+        try:
+            self.birth_date = birth_date.get_text()
+        except AttributeError:
+            return AttributeError
+
+    def set_height(self):
+        """
+        Collects and sets height for Fighter instance.
+        :return: sets self.height to scraped string with fighter's height in imperial feet and inches, returns AttributeError in case none was found
+        """
+        height = self.soup.find('strong', itemprop='height')
+        try:
+            self.height = height.get_text()
+        except AttributeError:
+            return AttributeError
+
+    def set_weight(self):
+        """
+        Collects and sets weight for Fighter instance.
+        :return: sets self.weight to scraped string with fighter's weight in imperial pounds and lbs suffix, returns AttributeError in case none was found
+        """
+        weight = self.soup.find('strong', itemprop='weight')
+        try:
+            self.weight = weight.get_text()
+        except AttributeError:
+            return AttributeError
+
+    def set_locality(self):
+        """
+        Collects and sets locality for Fighter instance.
+        :return: sets self.locality to scraped string with fighter's city and sometimes state or region, returns AttributeError in case none was found
+        """
+        locality = self.soup.find('span', class_='locality')
+        try:
+            self.locality = locality.get_text()
+        except AttributeError:
+            return AttributeError
+
+    def set_nationality(self):
+        """
+        Collects and sets nationality for Fighter instance.
+        :return: sets self.nationality to scraped string with fighter's nationality, returns AttributeError in case none was found
+        """
+        nationality = self.soup.find('strong', itemprop='nationality')
+        try:
+            self.nationality = nationality.get_text()
+        except AttributeError:
+            return AttributeError
+
+    def set_association(self):
+        """
+        Collects and sets association for Fighter instance.
+        :return: sets self.association to scraped string with fighter's gym association, returns AttributeError in case none was found
+        """
+        association = self.soup.find_all('span', itemprop='name') 
+        assosications = '/ '.join(map(lambda x: x.get_text(), association))
+        try:
+            self.association = assosications
+        except AttributeError:
+            return AttributeError
+
+    def set_weight_class(self):
+        """
+        Collects and sets weight_class for Fighter instance.
+        :return: sets self.weight_class to scraped string with fighter's most recent weight class, returns AttributeError in case none was found
+        """
+        item_wclass = self.soup.find('h6', class_='item wclass')
+        weight_class = self.soup.find('strong', class_='title')
+        try:
+            self.weight_class = weight_class.get_text()
+        except AttributeError:
+            return AttributeError
+
+    def set_wins_losses_draws_no_contests(self):
+        """
+        Collects and sets wins, losses, draws and no contests for Fighter instance.
+        :return: sets self.wins, self.losses, self.draws, self.no_contests to scraped string with fighter's record attributes, returns AttributeError in case none was found
+        """
+        record_stats = self.soup.find_all('span', class_='counter')
+        try:
+            self.wins = record_stats[0].get_text()
+            self.losses = record_stats[1].get_text()
+            if len(record_stats) > 2:    #dynamic site layout
+                self.draws = record_stats[2].get_text()
+                if (len(record_stats) > 3):
+                    self.no_contests = record_stats[3].get_text()
         except AttributeError:
             return AttributeError
 
@@ -312,7 +432,14 @@ class Fighter(object):
         :return: None
         """
         fighter_dictionary = {self.name: []}  # initializing dictionary that will be passed into json file.
+        #fighters_dict = {'fighters' : []}
+        #fighter_dictionary = {}
 
+        #fighter_dictionary['name'] = self.name
+        #fighter_dictionary['nickName'] = self.nickName
+        #fighter_dictionary['birthDay'] = self.birthDay
+        #fighter_dictionary['fightHistoryPro'] = []
+        #fighter_dictionary
         for index in range(len(self.result_data)):
             try:
                 opp = self.opponents[index]
@@ -349,13 +476,83 @@ class Fighter(object):
             line = {'opponent': opp, 'result': result, 'event': event, 'date': event_date, 'method': method,
                     'judge': judges, 'round': rounds, 'time': time}
             fighter_dictionary[self.name].append(line)
+            #fighter_dictionary['fightHistoryPro'].append(line)
+
+        #fighters_dict['fighters'].append(fighter_dictionary)
 
         with open(f'{filename}.json') as fighter_json:
             data = json.load(fighter_json)
         data.update(fighter_dictionary)
+        #data.update(fighters_dict)
         with open(f'{filename}.json', 'w') as fighter_json:
             json.dump(data, fighter_json, indent=4)
         print(f'JSON file was successfully overwritten for {self.name}!')
+    
+    def save_data(self):
+        """
+        Writing all collected information regarding fighter instance to json file.
+        :param filename: string with name of the file we want to save data to; file will be created with given name
+        :return: None
+        """
+        #fighter_dictionary = {self.name: []}  # initializing dictionary that will be passed into json file.
+        #fighters_dict = {'fighters' : []}
+        fighter_dictionary = {}
+
+        fighter_dictionary['name'] = self.name
+        fighter_dictionary['nickName'] = self.nickName
+        fighter_dictionary['birthDate'] = self.birth_date
+        fighter_dictionary['height'] = self.height
+        fighter_dictionary['weight'] = self.weight
+        fighter_dictionary['locality'] = self.locality
+        fighter_dictionary['nationality'] = self.nationality
+        fighter_dictionary['association'] = self.association
+        fighter_dictionary['weightclass'] = self.weight_class
+        fighter_dictionary['wins'] = self.wins
+        fighter_dictionary['losses'] = self.losses
+        fighter_dictionary['draws'] = self.draws
+        fighter_dictionary['noContests'] = self.no_contests
+        fighter_dictionary['fightHistoryPro'] = []
+        #fighter_dictionary
+        for index in range(len(self.result_data)):
+            try:
+                opp = self.opponents[index]
+            except IndexError:
+                opp = 'N/A'
+            try:
+                result = self.result_data[index]
+            except IndexError:
+                result = 'N/A'
+            try:
+                event = self.events[index]
+            except IndexError:
+                event = 'NA'
+            try:
+                event_date = self.events_date[index]
+            except IndexError:
+                event_date = 'NA'
+            try:
+                method = self.method[index]
+            except IndexError:
+                method = 'NA'
+            try:
+                judges = self.judges[index]
+            except IndexError:
+                judges = 'NA'
+            try:
+                rounds = self.rounds[index]
+            except IndexError:
+                rounds = 'NA'
+            try:
+                time = self.time[index]
+            except IndexError:
+                time = 'NA'
+            line = {'opponent': opp, 'result': result, 'event': event, 'date': event_date, 'method': method,
+                    'judge': judges, 'round': rounds, 'time': time}
+            #fighter_dictionary[self.name].append(line)
+            fighter_dictionary['fightHistoryPro'].append(line)
+
+        #fighters_dict['fighters'].append(fighter_dictionary)
+        allfighters['fighters'].append(fighter_dictionary)
 
     def scrape_fighter(self, filetype, filename, fighter_index=None, fighter_page=None):
         """
@@ -374,6 +571,15 @@ class Fighter(object):
         self._set_resource()
         self._set_soup()
         if self.set_name() != AttributeError:  # checking if there is existing name for a fighter instance.
+            self.set_nick_name()
+            self.set_birth_date()
+            self.set_height()
+            self.set_weight()
+            self.set_locality()
+            self.set_nationality()
+            self.set_association()
+            self.set_weight_class()
+            self.set_wins_losses_draws_no_contests()
             self.set_pro_fights()
             self.grab_result_data()
             self.grab_opponents()
@@ -387,7 +593,8 @@ class Fighter(object):
                 if filetype == 'csv':               # fighter instance will be dropped.
                     self.save_to_csv(filename)
                 elif filetype == 'json':
-                    self.save_to_json(filename)
+                    self.save_data()
+                    #self.save_to_json(filename)
             return True
         else:
             return False
@@ -581,6 +788,7 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv'):
         "Women's Flyweight": 10,
         "Women's Bantamweight": 9,
         "Women's Featherweight": 7,
+        "Catchweight" : 14,
     }
 
     if filetype == 'csv':
@@ -595,6 +803,7 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv'):
             json.dump(json_init, fighter_json)
 
     for fighter in fighters_list:
+        print(f'Web scapring started for {fighter}')
         search_results = search_fighter(fighter)   # variable that stores different searching results.
         find_fighter = search_results[0]           # assigning first result to variable.
         selector = soup_selector(find_fighter)     # creating selector based on search result.
@@ -665,6 +874,10 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv'):
                                             else:
                                                 # creating Fighter's instance and saving it.
                                                 create_fighter_instance(results)
+    
+    with open(f'{filename}.json', 'w') as fighter_json:
+            json.dump(allfighters, fighter_json, indent=4)
+            print(f'JSON file was successfully created for {fighters_list}!')
 
 
 def helper_read_fighters_from_csv(filename, delimiter=','):
@@ -686,7 +899,22 @@ def helper_read_fighters_from_csv(filename, delimiter=','):
 
 
 if __name__ == '__main__':
-    scrape_all_fighters('sherdog')
+    #scrape_all_fighters('sherdog')
+    t0 = time.time()
+    #scrape_all_fighters(filename='fighters' ,filetype="json")
+    #f_list = [('Francis Ngannou', 'Heavyweight', 'NA'), ('Stipe Miocic', 'Heavyweight', 'NA')
+    #, ('Tim Means', 'Welterweight', 'NA'), ('Khabib Nurmagomedov', 'Lightweight', 'NA')]
+    #scrape_list_of_fighters(f_list, 'scraped_list', filetype='json')
+    #scrape_list_of_fighters(ufc['men'], 'ufc-roster', filetype='json')
+    ufc = scrape_ufc_roster(save='no', filetype=None)
+    scrape_start_time = time.time()
+    scrape_list_of_fighters(ufc['men'][:3], 'ufc-roster', filetype='json')
+    scrape_complete_time = time.time()
+    
+    print(f"{round(scrape_complete_time-scrape_start_time,2)} seconds to download {len(ufc)} fighter's data.")
+
+
+    #print(ufc)
 
 
 
