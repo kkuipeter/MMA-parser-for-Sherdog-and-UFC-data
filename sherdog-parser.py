@@ -11,7 +11,6 @@ import json
 import time
 import concurrent.futures
 
-
 # Initializes logging file.
 logging.basicConfig(filename='sherdog.log', level=logging.INFO, format='%(asctime)s:%(levelname)s:%(message)s')
 allfighters = {'fighters' : []}
@@ -33,6 +32,7 @@ class Fighter(object):
         self.height = None
         self.weight = None
         self.locality = None
+        self.nationality = None
         self.association = None
         self.weight_class = None
         self.wins = None
@@ -595,8 +595,10 @@ class Fighter(object):
                 if filetype == 'csv':               # fighter instance will be dropped.
                     self.save_to_csv(filename)
                 elif filetype == 'json':
-                    self.save_data()
-                    #self.save_to_json(filename)
+                    if(fighter_index):
+                        self.save_to_json(filename)
+                    else:
+                        self.save_data()
             return True
         else:
             return False
@@ -621,6 +623,7 @@ def scrape_all_fighters(filename, filetype='csv'):
         json_init = {}
         with open(f'{filename}.json', 'w') as fighter_json:
             json.dump(json_init, fighter_json)
+            print(f'Created empty JSON file with name: {filename}')
 
     fighter_index = 0   # sets up and stores index of a fighter that scraper is collecting information about.
     fail_counter = 0    # amount of 'empty' indexes in a row.
@@ -644,6 +647,8 @@ def scrape_ufc_roster(save='no', filetype=None):
     :return: dictionary with information about UFC roster, for each fighter there will be a tuple containing
              (name, weight-division, nickname)
     """
+
+    scrape_start_time = time.time()
     ufc_roster = {
         'men': [],
         'women': []
@@ -652,39 +657,48 @@ def scrape_ufc_roster(save='no', filetype=None):
     men_roster = []
     women_roster = []
 
+    def find_ufc_fighter(fighter):
+        name = fighter.find('span', class_='c-listing-athlete__name').get_text().strip()
+        print(f'Found {name} from UFC website...')
+        division = fighter.find_all('div', class_='field__item')
+        try:
+            div = division[1].get_text()
+        except IndexError:
+            try:
+                div = division[0].get_text()
+            except IndexError:
+                div = 'NA'
+        try:
+            nickname = fighter.find('span', class_='c-listing-athlete__nickname').div.get_text()
+            nickname = nickname.replace('\n', '')
+        except AttributeError:
+            nickname = 'NA'
+        if gender_index == 2:
+            women_roster.append((name, div, nickname))
+        elif gender_index == 1:
+            men_roster.append((name, div, nickname))
+
     for gender_index in range(1, 3):
         page = 0
         while True:
             resource = requests.get(f'https://www.ufc.com/athletes/all?filters%5B0%5D=status%3A23&'
                                     f'gender={gender_index}&page={page}')
             soup = BeautifulSoup(resource.text, features='html.parser')
-            fighter = soup.find_all('div', class_='c-listing-athlete__text')
-            if len(fighter) == 0:  # if page is empty = there are no fighters left, current gender index is done.
+            fighters = soup.find_all('div', class_='c-listing-athlete__text')
+            if len(fighters) == 0:  # if page is empty = there are no fighters left, current gender index is done.
                 break
             else:
-                for index in range(len(fighter)):
-                    name = fighter[index].find('span', class_='c-listing-athlete__name').get_text().strip()
-                    division = fighter[index].find_all('div', class_='field__item')
-                    try:
-                        div = division[1].get_text()
-                    except IndexError:
-                        try:
-                            div = division[0].get_text()
-                        except IndexError:
-                            div = 'NA'
-                    try:
-                        nickname = fighter[index].find('span', class_='c-listing-athlete__nickname').div.get_text()
-                        nickname = nickname.replace('\n', '')
-                    except AttributeError:
-                        nickname = 'NA'
-                    if gender_index == 2:
-                        women_roster.append((name, div, nickname))
-                    elif gender_index == 1:
-                        men_roster.append((name, div, nickname))
+                #for index in range(len(fighter)):
+                threads = min(MAX_THREADS, len(fighters))
+                with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
+                    executor.map(find_ufc_fighter, fighters)
                 page += 1
 
     ufc_roster['men'] = men_roster
     ufc_roster['women'] = women_roster
+
+    scrape_end_time = time.time()
+    print(f'\nFound {len(men_roster)} men and {len(women_roster)} fighters from UFC website in {round(scrape_end_time - scrape_start_time, 2)} seconds...')
 
     if save == 'yes':
         if filetype == 'csv':
@@ -914,11 +928,7 @@ if __name__ == '__main__':
     #scrape_list_of_fighters(f_list, 'scraped_list', filetype='json')
     #scrape_list_of_fighters(ufc['men'], 'ufc-roster', filetype='json')
     ufc = scrape_ufc_roster(save='no', filetype=None)
-    scrape_list_of_fighters(ufc['men'][:200], 'ufc-roster', filetype='json')
-    
-    
-
-
+    scrape_list_of_fighters(ufc['men'], 'ufc-roster', filetype='json')
     #print(ufc)
 
 
