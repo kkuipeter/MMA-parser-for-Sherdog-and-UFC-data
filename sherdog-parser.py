@@ -9,11 +9,13 @@ import csv
 import logging
 import json
 import time
+import concurrent.futures
 
 
 # Initializes logging file.
 logging.basicConfig(filename='sherdog.log', level=logging.INFO, format='%(asctime)s:%(levelname)s:%(message)s')
 allfighters = {'fighters' : []}
+MAX_THREADS = 30
 
 
 class Fighter(object):
@@ -721,6 +723,8 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv'):
     :param filetype: string with either 'csv' or 'json' as a type of file where results will be stored. Default is 'csv'
     :return: None
     """
+    scrape_start_time = time.time()
+    threads = min(MAX_THREADS, len(fighters_list))
     
     def search_fighter(fighter_tuple):
         """
@@ -802,7 +806,7 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv'):
         with open(f'{filename}.json', 'w') as fighter_json:
             json.dump(json_init, fighter_json)
 
-    for fighter in fighters_list:
+    def scrape_fighter_data(fighter):
         print(f'Web scapring started for {fighter}')
         search_results = search_fighter(fighter)   # variable that stores different searching results.
         find_fighter = search_results[0]           # assigning first result to variable.
@@ -874,11 +878,16 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv'):
                                             else:
                                                 # creating Fighter's instance and saving it.
                                                 create_fighter_instance(results)
-    
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
+        executor.map(scrape_fighter_data, fighters_list)
+        
+    scrape_complete_time = time.time()
+    print(f"Scraping {len(fighters_list)} fighter's data from Sherdog completed in {round(scrape_complete_time-scrape_start_time,2)} seconds.")
+
     with open(f'{filename}.json', 'w') as fighter_json:
             json.dump(allfighters, fighter_json, indent=4)
-            print(f'JSON file was successfully created for {fighters_list}!')
-
+            print(f'JSON file was successfully saved for {len(fighters_list)} fighters!')
 
 def helper_read_fighters_from_csv(filename, delimiter=','):
     """
@@ -897,21 +906,17 @@ def helper_read_fighters_from_csv(filename, delimiter=','):
             fighters_list.append(split_str)
     return fighters_list
 
-
 if __name__ == '__main__':
     #scrape_all_fighters('sherdog')
-    t0 = time.time()
     #scrape_all_fighters(filename='fighters' ,filetype="json")
     #f_list = [('Francis Ngannou', 'Heavyweight', 'NA'), ('Stipe Miocic', 'Heavyweight', 'NA')
     #, ('Tim Means', 'Welterweight', 'NA'), ('Khabib Nurmagomedov', 'Lightweight', 'NA')]
     #scrape_list_of_fighters(f_list, 'scraped_list', filetype='json')
     #scrape_list_of_fighters(ufc['men'], 'ufc-roster', filetype='json')
     ufc = scrape_ufc_roster(save='no', filetype=None)
-    scrape_start_time = time.time()
-    scrape_list_of_fighters(ufc['men'][:3], 'ufc-roster', filetype='json')
-    scrape_complete_time = time.time()
+    scrape_list_of_fighters(ufc['men'][:200], 'ufc-roster', filetype='json')
     
-    print(f"{round(scrape_complete_time-scrape_start_time,2)} seconds to download {len(ufc)} fighter's data.")
+    
 
 
     #print(ufc)
