@@ -28,6 +28,7 @@ class Fighter(object):
         self.url = None
         self.name = None  # str: fighter's name, None by default
         self.nickName = None
+        self.gender = None
         self.birth_date = None
         self.height = None
         self.weight = None
@@ -502,6 +503,7 @@ class Fighter(object):
 
         fighter_dictionary['name'] = self.name
         fighter_dictionary['nickName'] = self.nickName
+        fighter_dictionary['gender'] = self.gender
         fighter_dictionary['birthDate'] = self.birth_date
         fighter_dictionary['height'] = self.height
         fighter_dictionary['weight'] = self.weight
@@ -698,7 +700,7 @@ def scrape_ufc_roster(save='no', filetype=None):
     ufc_roster['women'] = women_roster
 
     scrape_end_time = time.time()
-    print(f'\nFound {len(men_roster)} men and {len(women_roster)} fighters from UFC website in {round(scrape_end_time - scrape_start_time, 2)} seconds...')
+    print(f'\nFound {len(men_roster)} men and {len(women_roster)} women fighters from UFC website in {round(scrape_end_time - scrape_start_time, 2)} seconds...\n')
 
     if save == 'yes':
         if filetype == 'csv':
@@ -728,7 +730,7 @@ def scrape_ufc_roster(save='no', filetype=None):
     return ufc_roster
 
 
-def scrape_list_of_fighters(fighters_list, filename, filetype='csv'):
+def scrape_list_of_fighters(fighters_list, filename, filetype='csv', gender=None):
     """
     Scrapes information about list of fighters in sherdog's database and saves them into csv or json file.
     :param fighters_list: list with fighters to be scrapped from sherdog, fighter list should contain tuple with
@@ -737,6 +739,13 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv'):
     :param filetype: string with either 'csv' or 'json' as a type of file where results will be stored. Default is 'csv'
     :return: None
     """
+    number_of_women = None
+    if(gender and len(fighters_list) == 2):
+        fighters_list = fighters_list[gender]
+    else:
+        number_of_women = len(fighters_list['women'])
+        fighters_list = fighters_list['men'] + fighters_list['women']
+
     scrape_start_time = time.time()
     threads = min(MAX_THREADS, len(fighters_list))
     
@@ -783,7 +792,7 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv'):
         except IndexError:
             return IndexError
 
-    def create_fighter_instance(matching):
+    def create_fighter_instance(matching, index = None):
         """
         Nested function that makes creating and scraping fighter's instance object more convenient.
         :param matching: css selector results
@@ -791,6 +800,12 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv'):
         """
         fighter_page = matching[0]['href']
         F = Fighter()
+        if(index and index < len(fighters_list) - number_of_women):
+            F.gender = 'men'
+        elif(index):
+            F.gender = 'women'
+        else:
+            F.gender = gender
         F.scrape_fighter(filetype, filename, fighter_page=fighter_page)
 
     weight_classes = {
@@ -821,6 +836,7 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv'):
             json.dump(json_init, fighter_json)
 
     def scrape_fighter_data(fighter):
+        index = fighters_list.index(fighter)
         print(f'Web scapring started for {fighter}')
         search_results = search_fighter(fighter)   # variable that stores different searching results.
         find_fighter = search_results[0]           # assigning first result to variable.
@@ -831,7 +847,7 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv'):
                          f'if there is no mistake in fighter name!')
         else:
             if len(results) == 1:
-                create_fighter_instance(results)         # creating Fighter's instance and saving it.
+                create_fighter_instance(results, index)         # creating Fighter's instance and saving it.
             else:
                 find_fighter = search_results[1]         # assigning second result to variable.
                 selector = soup_selector(find_fighter)   # creating selector based on search result.
@@ -850,7 +866,7 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv'):
                                          f'in nickname!')
                         else:
                             if len(results) == 1:
-                                create_fighter_instance(results)  # creating Fighter's instance and saving it.
+                                create_fighter_instance(results, index)  # creating Fighter's instance and saving it.
                 else:
                     selector = soup_selector(find_fighter)        # creating selector based on search result.
                     results = check_result(selector)              # checking if there is a valid outcome.
@@ -859,7 +875,7 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv'):
                                          f'in nickname!')
                     else:
                         if len(results) == 1:
-                            create_fighter_instance(results)      # creating Fighter's instance and saving it.
+                            create_fighter_instance(results, index)      # creating Fighter's instance and saving it.
                         else:
                             try:
                                 find_fighter = search_results[2]  # assigning third result to variable.
@@ -874,7 +890,7 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv'):
                                                  f'- searching with name & nickname data was unsuccessful!')
                                 else:
                                     if len(results) == 1:
-                                        create_fighter_instance(results)  # creating Fighter's instance and saving it.
+                                        create_fighter_instance(results, index)  # creating Fighter's instance and saving it.
                                     else:
                                         try:
                                             find_fighter = search_results[3]  # assigning fourth result to variable.
@@ -891,13 +907,13 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv'):
                                                              f'- searching with all provided data was unsuccessful!')
                                             else:
                                                 # creating Fighter's instance and saving it.
-                                                create_fighter_instance(results)
-
+                                                create_fighter_instance(results, index)
+        
     with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
         executor.map(scrape_fighter_data, fighters_list)
         
     scrape_complete_time = time.time()
-    print(f"Scraping {len(fighters_list)} fighter's data from Sherdog completed in {round(scrape_complete_time-scrape_start_time,2)} seconds.")
+    print(f"\nScraping {len(fighters_list)} fighter's data from Sherdog completed in {round(scrape_complete_time-scrape_start_time,2)} seconds.")
 
     with open(f'{filename}.json', 'w') as fighter_json:
             json.dump(allfighters, fighter_json, indent=4)
@@ -928,12 +944,4 @@ if __name__ == '__main__':
     #scrape_list_of_fighters(f_list, 'scraped_list', filetype='json')
     #scrape_list_of_fighters(ufc['men'], 'ufc-roster', filetype='json')
     ufc = scrape_ufc_roster(save='no', filetype=None)
-    scrape_list_of_fighters(ufc['men'], 'ufc-roster', filetype='json')
-    #print(ufc)
-
-
-
-
-
-
-
+    scrape_list_of_fighters(ufc, 'ufc-roster', filetype='json')
