@@ -487,7 +487,7 @@ class Fighter(object):
             data = json.load(fighter_json)
         data.update(fighter_dictionary)
         #data.update(fighters_dict)
-        with open(f'{filename}.json', 'w') as fighter_json:
+        with open(f'{filename}.json', 'w', encoding="utf-8") as fighter_json:
             json.dump(data, fighter_json, indent=4)
         print(f'JSON file was successfully overwritten for {self.name}!')
     
@@ -739,6 +739,7 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv', gender=None
     :param filetype: string with either 'csv' or 'json' as a type of file where results will be stored. Default is 'csv'
     :return: None
     """
+    number_of_failed_searches = 0
     number_of_women = None
     if(gender and len(fighters_list) == 2):
         fighters_list = fighters_list[gender]
@@ -853,65 +854,76 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv', gender=None
             if len(results) == 1:
                 create_fighter_instance(results, index)         # creating Fighter's instance and saving it.
             else:
-                find_fighter = search_results[1]         # assigning second result to variable.
-                selector = soup_selector(find_fighter)   # creating selector based on search result.
-                results = check_result(selector)         # checking if there is a valid outcome.
-                if results == IndexError:
-                    try:
-                        find_fighter = search_results[2]         # assigning third result to variable.
-                    except KeyError:
-                        print('Search engine tried to narrow down findings by using weight-class filter, apparently '
-                              'you have not specified weight-class data!')
+                if( fighter[2] != 'NA'):    #if fighter has nickname (not NA), then and only then search #2 should have priority over search #3) - see Steve Garcia
+                    find_fighter = search_results[2]         # assigning third result to variable.
+                    selector = soup_selector(find_fighter)   # creating selector based on search result.
+                    results = check_result(selector)
+                    if len(results) == 1:
+                        create_fighter_instance(results, index) 
+                elif(fighter[2] == 'NA' or results == IndexError):
+                    find_fighter = search_results[1]         # assigning second result to variable.
+                    selector = soup_selector(find_fighter)   # creating selector based on search result.
+                    results = check_result(selector)         # checking if there is a valid outcome.
+                    if results == IndexError:
+                        try:
+                            find_fighter = search_results[2]         # assigning third result to variable.
+                        except KeyError:
+                            print('Search engine tried to narrow down findings by using weight-class filter, apparently '
+                                'you have not specified weight-class data!')
+                        else:
+                            selector = soup_selector(find_fighter)   # creating selector based on search result.
+                            results = check_result(selector)         # checking if there is a valid outcome.
+                            if results == IndexError:
+                                logging.info(f'Error occured with {fighter}, please check carefully if there is no mistake '
+                                            f'in nickname!')
+                                number_of_failed_searches += 1
+                            else:
+                                if len(results) == 1:
+                                    create_fighter_instance(results, index)  # creating Fighter's instance and saving it.
                     else:
-                        selector = soup_selector(find_fighter)   # creating selector based on search result.
-                        results = check_result(selector)         # checking if there is a valid outcome.
+                        selector = soup_selector(find_fighter)        # creating selector based on search result.
+                        results = check_result(selector)              # checking if there is a valid outcome.
                         if results == IndexError:
                             logging.info(f'Error occured with {fighter}, please check carefully if there is no mistake '
-                                         f'in nickname!')
+                                            f'in nickname!')
+                            number_of_failed_searches += 1
                         else:
                             if len(results) == 1:
-                                create_fighter_instance(results, index)  # creating Fighter's instance and saving it.
-                else:
-                    selector = soup_selector(find_fighter)        # creating selector based on search result.
-                    results = check_result(selector)              # checking if there is a valid outcome.
-                    if results == IndexError:
-                        logging.info(f'Error occured with {fighter}, please check carefully if there is no mistake '
-                                         f'in nickname!')
-                    else:
-                        if len(results) == 1:
-                            create_fighter_instance(results, index)      # creating Fighter's instance and saving it.
-                        else:
-                            try:
-                                find_fighter = search_results[2]  # assigning third result to variable.
-                            except KeyError:
-                                print(f'Search engine tried to narrow down findings by name & nickname, apparently this'
-                                      f'was not enough to find {fighter[0]}!')
+                                create_fighter_instance(results, index)      # creating Fighter's instance and saving it.
                             else:
-                                selector = soup_selector(find_fighter)  # creating selector based on search result.
-                                results = check_result(selector)        # checking if there is a valid outcome.
-                                if results == IndexError:
-                                    logging.info(f'Error occurred with {fighter}, please check carefully '
-                                                 f'- searching with name & nickname data was unsuccessful!')
+                                try:
+                                    find_fighter = search_results[2]  # assigning third result to variable.
+                                except KeyError:
+                                    print(f'Search engine tried to narrow down findings by name & nickname, apparently this'
+                                        f'was not enough to find {fighter[0]}!')
                                 else:
-                                    if len(results) == 1:
-                                        create_fighter_instance(results, index)  # creating Fighter's instance and saving it.
+                                    selector = soup_selector(find_fighter)  # creating selector based on search result.
+                                    results = check_result(selector)        # checking if there is a valid outcome.
+                                    if results == IndexError:
+                                        logging.info(f'Error occurred with {fighter}, please check carefully '
+                                                    f'- searching with name & nickname data was unsuccessful!')
+                                        number_of_failed_searches += 1
                                     else:
-                                        try:
-                                            find_fighter = search_results[3]  # assigning fourth result to variable.
-                                        except KeyError:
-                                            print(f'Search engine tried to narrow down findings by using all filters, '
-                                                  f'apparently this was not enough to find {fighter[0]}!')
+                                        if len(results) == 1:
+                                            create_fighter_instance(results, index)  # creating Fighter's instance and saving it.
                                         else:
-                                            # creating selector based on search result.
-                                            selector = soup_selector(find_fighter)
-                                            # checking if there is a valid outcome.
-                                            results = check_result(selector)
-                                            if results == IndexError:
-                                                logging.info(f'Error occurred with {fighter}, please check carefully '
-                                                             f'- searching with all provided data was unsuccessful!')
+                                            try:
+                                                find_fighter = search_results[3]  # assigning fourth result to variable.
+                                            except KeyError:
+                                                print(f'Search engine tried to narrow down findings by using all filters, '
+                                                    f'apparently this was not enough to find {fighter[0]}!')
                                             else:
-                                                # creating Fighter's instance and saving it.
-                                                create_fighter_instance(results, index)
+                                                # creating selector based on search result.
+                                                selector = soup_selector(find_fighter)
+                                                # checking if there is a valid outcome.
+                                                results = check_result(selector)
+                                                if results == IndexError:
+                                                    logging.info(f'Error occurred with {fighter}, please check carefully '
+                                                                f'- searching with all provided data was unsuccessful!')
+                                                    number_of_failed_searches += 1
+                                                else:
+                                                    # creating Fighter's instance and saving it.
+                                                    create_fighter_instance(results, index)
         
     with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
         executor.map(scrape_fighter_data, fighters_list)
