@@ -510,7 +510,7 @@ class Fighter(object):
         fighter_dictionary['locality'] = self.locality
         fighter_dictionary['nationality'] = self.nationality
         fighter_dictionary['association'] = self.association
-        fighter_dictionary['weightclass'] = self.weight_class
+        fighter_dictionary['weightClass'] = self.weight_class
         fighter_dictionary['wins'] = self.wins
         fighter_dictionary['losses'] = self.losses
         fighter_dictionary['draws'] = self.draws
@@ -743,8 +743,12 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv', gender=None
     if(gender and len(fighters_list) == 2):
         fighters_list = fighters_list[gender]
     else:
-        number_of_women = len(fighters_list['women'])
-        fighters_list = fighters_list['men'] + fighters_list['women']
+        try:
+            number_of_women = len(fighters_list['women'])
+            fighters_list = fighters_list['men'] + fighters_list['women']
+        except TypeError:   #normal search not entire UFC
+            pass
+
 
     scrape_start_time = time.time()
     threads = min(MAX_THREADS, len(fighters_list))
@@ -821,7 +825,7 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv', gender=None
         "Women's Flyweight": 10,
         "Women's Bantamweight": 9,
         "Women's Featherweight": 7,
-        "Catchweight" : 14,
+        "Catchweight" : 11,
     }
 
     if filetype == 'csv':
