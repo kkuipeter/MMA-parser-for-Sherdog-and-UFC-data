@@ -54,6 +54,7 @@ class Fighter(object):
         self.opponents = None  # list of str: opponents
         self.opponent_urls = None
         self.events = None  # list of str: events
+        self.event_urls = None
         self.events_date = None  # list of str: events date
         self.method = None  # list of str: methods in which fights have ended
         self.judges = None  # list od str: judges names
@@ -281,18 +282,22 @@ class Fighter(object):
 
     def grab_events(self):
         """
-        Collects and sets events in range of pro fights for Fighter instance.
+        Collects and sets events and event_urls in range of pro fights for Fighter instance.
         :return: list of strings with events
         """
         events = []
+        event_urls = []
         try:
             finder = self.pro_range.find_all('a')
             for index in range(1, len(finder), 2):
-                events.append(finder[index].get_text())
+                event_info = finder[index]
+                events.append(event_info.get_text())
+                event_urls.append(event_info['href'])
         except AttributeError:
             logging.info(f'Attribute Error while grabbing event data for {self.name}, the data might be missing!')
         else:
             self.events = events
+            self.event_urls = event_urls
             return events
 
     def grab_events_date(self):
@@ -577,6 +582,10 @@ class Fighter(object):
             except IndexError:
                 event = 'NA'
             try:
+                event_url = self.event_urls[index]
+            except IndexError:
+                event_url = 'NA'
+            try:
                 event_date = self.events_date[index]
             except IndexError:
                 event_date = 'NA'
@@ -596,7 +605,7 @@ class Fighter(object):
                 time = self.time[index]
             except IndexError:
                 time = 'NA'
-            line = {'opponent': opp, 'opponentUrl' : opponent_url, 'result': result, 'event': event, 'date': event_date, 'method': method,
+            line = {'opponent': opp, 'opponentUrl' : opponent_url, 'result': result, 'event': event, 'eventUrl' : event_url, 'date': event_date, 'method': method,
                     'judge': judges, 'round': rounds, 'time': time}
             #fighter_dictionary[self.name].append(line)
             fighter_dictionary['fightHistoryPro'].append(line)
