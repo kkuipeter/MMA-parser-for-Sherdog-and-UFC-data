@@ -49,6 +49,7 @@ class Fighter(object):
 
         self.result_data = None  # list of str: fight results
         self.opponents = None  # list of str: opponents
+        self.opponent_urls = None
         self.events = None  # list of str: events
         self.events_date = None  # list of str: events date
         self.method = None  # list of str: methods in which fights have ended
@@ -249,6 +250,22 @@ class Fighter(object):
         else:
             self.opponents = fighters
             return fighters
+
+    def grab_opponent_urls(self):
+        """
+        Collects and sets urls of opponents in range of pro fights for Fighter instance.
+        :return: list of strings with opponents urls
+        """
+        opponent_urls = []
+        try:
+            finder = self.pro_range.find_all('a')
+            for index in range(0, len(finder), 2):
+                opponent_urls.append(finder[index]['href'])
+        except AttributeError:
+            logging.info(f'Attribute Error while grabbing opponent url for {self.name}, the data might be missing!')
+        else:
+            self.opponent_urls = opponent_urls
+            return opponent_urls
 
     def grab_events(self):
         """
@@ -523,6 +540,10 @@ class Fighter(object):
             except IndexError:
                 opp = 'N/A'
             try:
+                opponent_url = self.opponent_urls[index]
+            except IndexError:
+                opponent_url = 'N/A'
+            try:
                 result = self.result_data[index]
             except IndexError:
                 result = 'N/A'
@@ -550,7 +571,7 @@ class Fighter(object):
                 time = self.time[index]
             except IndexError:
                 time = 'NA'
-            line = {'opponent': opp, 'result': result, 'event': event, 'date': event_date, 'method': method,
+            line = {'opponent': opp, 'opponentUrl' : opponent_url, 'result': result, 'event': event, 'date': event_date, 'method': method,
                     'judge': judges, 'round': rounds, 'time': time}
             #fighter_dictionary[self.name].append(line)
             fighter_dictionary['fightHistoryPro'].append(line)
@@ -587,12 +608,14 @@ class Fighter(object):
             self.set_pro_fights()
             self.grab_result_data()
             self.grab_opponents()
+            self.grab_opponent_urls()
             self.grab_events_date()
             self.grab_events()
             self.grab_judges()
             self.grab_method()
             self.grab_rounds()
             self.grab_time()
+            
             if self.get_validation() != TypeError:  # if there was an empty list while validating data,
                 if filetype == 'csv':               # fighter instance will be dropped.
                     self.save_to_csv(filename)
