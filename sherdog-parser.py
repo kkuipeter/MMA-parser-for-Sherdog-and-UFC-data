@@ -1058,6 +1058,7 @@ def find_sherdog_url_with_google(fighter):
             number_of_failed_searches -= 1
             return fighter_page
     except Exception as e:
+        logging.info(f'Google blocked requests....on {fighter}...with exception: {e}')
         print(f'Google blocked requests....on {fighter}...')
 
 if __name__ == '__main__':
