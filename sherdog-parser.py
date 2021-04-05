@@ -800,6 +800,8 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv', gender=None
     number_of_women = None
     if(gender and len(fighters_list) == 2):
         fighters_list = fighters_list[gender]
+        if (gender == "women"):
+            number_of_women = len(fighters_list)
     else:
         try:
             number_of_women = len(fighters_list['women'])
