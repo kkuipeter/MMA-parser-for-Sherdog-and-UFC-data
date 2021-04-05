@@ -10,10 +10,13 @@ import logging
 import json
 import time
 import concurrent.futures
+from googlesearch import search
 
 # Initializes logging file.
 logging.basicConfig(filename='sherdog.log', level=logging.INFO, format='%(asctime)s:%(levelname)s:%(message)s')
 allfighters = {'fighters' : []}
+missedFighters = ()
+number_of_failed_searches = 0
 MAX_THREADS = 30
 
 
@@ -650,8 +653,8 @@ class Fighter(object):
             self.grab_rounds()
             self.grab_time()
             
-            if self.get_validation() != TypeError:  # if there was an empty list while validating data,
-                if filetype == 'csv':               # fighter instance will be dropped.
+            if self.get_validation() != TypeError:  # if there was an empty list while validating data, fighter instance will be dropped.
+                if filetype == 'csv':
                     self.save_to_csv(filename)
                 elif filetype == 'json':
                     if(fighter_index):
@@ -706,7 +709,6 @@ def scrape_ufc_roster(save='no', filetype=None):
     :return: dictionary with information about UFC roster, for each fighter there will be a tuple containing
              (name, weight-division, nickname)
     """
-
     scrape_start_time = time.time()
     ufc_roster = {
         'men': [],
@@ -796,7 +798,6 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv', gender=None
     :param filetype: string with either 'csv' or 'json' as a type of file where results will be stored. Default is 'csv'
     :return: None
     """
-    number_of_failed_searches = 0
     number_of_women = None
     if(gender and len(fighters_list) == 2):
         fighters_list = fighters_list[gender]
@@ -862,7 +863,11 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv', gender=None
         :param matching: css selector results
         :return: None
         """
-        fighter_page = matching[0]['href']
+        try:
+            fighter_page = matching[0]['href']
+        except Exception as e:
+            fighter_page = matching # fighter page is the URL - this is after google search(edge cases)
+
         F = Fighter()
         if(index and index < len(fighters_list) - number_of_women):
             F.gender = 'men'
@@ -900,6 +905,7 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv', gender=None
             json.dump(json_init, fighter_json)
 
     def scrape_fighter_data(fighter):
+        global number_of_failed_searches
         index = fighters_list.index(fighter)
         print(f'Web scapring started for {fighter}')
         search_results = search_fighter(fighter)   # variable that stores different searching results.
@@ -909,6 +915,9 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv', gender=None
         if results == IndexError:
             logging.info(f'Error occurred with {fighter}, please check carefully '
                          f'if there is no mistake in fighter name!')
+            number_of_failed_searches += 1
+            create_fighter_instance(find_sherdog_url_with_google(fighter))
+            return None
         else:
             if len(results) == 1:
                 create_fighter_instance(results, index)         # creating Fighter's instance and saving it.
@@ -917,8 +926,13 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv', gender=None
                     find_fighter = search_results[2]         # assigning third result to variable.
                     selector = soup_selector(find_fighter)   # creating selector based on search result.
                     results = check_result(selector)
-                    if len(results) == 1:
-                        create_fighter_instance(results, index) 
+
+                    if results == IndexError:
+                        number_of_failed_searches += 1
+                        create_fighter_instance(find_sherdog_url_with_google(fighter))
+                        return None
+                    elif len(results) == 1:
+                        create_fighter_instance(results, index)
                 elif(fighter[2] == 'NA' or results == IndexError):
                     find_fighter = search_results[1]         # assigning second result to variable.
                     selector = soup_selector(find_fighter)   # creating selector based on search result.
@@ -936,6 +950,8 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv', gender=None
                                 logging.info(f'Error occured with {fighter}, please check carefully if there is no mistake '
                                             f'in nickname!')
                                 number_of_failed_searches += 1
+                                create_fighter_instance(find_sherdog_url_with_google(fighter))
+                                return None
                             else:
                                 if len(results) == 1:
                                     create_fighter_instance(results, index)  # creating Fighter's instance and saving it.
@@ -946,6 +962,8 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv', gender=None
                             logging.info(f'Error occured with {fighter}, please check carefully if there is no mistake '
                                             f'in nickname!')
                             number_of_failed_searches += 1
+                            create_fighter_instance(find_sherdog_url_with_google(fighter))
+                            return None
                         else:
                             if len(results) == 1:
                                 create_fighter_instance(results, index)      # creating Fighter's instance and saving it.
@@ -962,6 +980,8 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv', gender=None
                                         logging.info(f'Error occurred with {fighter}, please check carefully '
                                                     f'- searching with name & nickname data was unsuccessful!')
                                         number_of_failed_searches += 1
+                                        create_fighter_instance(find_sherdog_url_with_google(fighter))
+                                        return None
                                     else:
                                         if len(results) == 1:
                                             create_fighter_instance(results, index)  # creating Fighter's instance and saving it.
@@ -980,6 +1000,8 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv', gender=None
                                                     logging.info(f'Error occurred with {fighter}, please check carefully '
                                                                 f'- searching with all provided data was unsuccessful!')
                                                     number_of_failed_searches += 1
+                                                    create_fighter_instance(find_sherdog_url_with_google(fighter))
+                                                    return None
                                                 else:
                                                     # creating Fighter's instance and saving it.
                                                     create_fighter_instance(results, index)
@@ -988,7 +1010,8 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv', gender=None
         executor.map(scrape_fighter_data, fighters_list)
         
     scrape_complete_time = time.time()
-    print(f"\nScraping {len(fighters_list)} fighter's data from Sherdog completed in {round(scrape_complete_time-scrape_start_time,2)} seconds.")
+    print(f"\nScraping {len(fighters_list) - number_of_failed_searches} fighter's data from Sherdog completed in {round(scrape_complete_time-scrape_start_time,2)} seconds.")
+    print(f"Failed to find {number_of_failed_searches} fighter in Sherdog.")
 
     with open(f'{filename}.json', 'w') as fighter_json:
             json.dump(allfighters, fighter_json, indent=4)
@@ -1011,6 +1034,32 @@ def helper_read_fighters_from_csv(filename, delimiter=','):
             fighters_list.append(split_str)
     return fighters_list
 
+def find_sherdog_url_with_google(fighter):
+    global number_of_failed_searches
+    if(fighter[2] != "NA"):
+        query = fighter[0] + " " + fighter[2] + " :site:sherdog.com/fighter"
+    else:
+        query = fighter[0] + " " + fighter[1] + " :site:sherdog.com/fighter"
+
+    try:
+        for firstSearch in search(query, lang = "en", tld="com", num=1, stop=1, pause=2):
+            fighter_page = firstSearch.split("sherdog.com")[1]
+            print(f'Found {fighter_page} - for {fighter} via Google search...')
+            logging.info(f'Found {fighter_page} - for {fighter} via Google search...')
+            number_of_failed_searches -= 1
+            return fighter_page
+
+        print("Didn't find google search result with nickname, now searching with only the name...")
+        query = fighter[0] + " :site:sherdog.com/fighter"
+        for secondSearch in search(query, lang = "en", tld="com", num=1, stop=1, pause=2):
+            fighter_page = secondSearch.split("sherdog.com")[1]
+            print(f'Found {fighter_page} - for {fighter} via Google search(name)...')
+            logging.info(f'Found {fighter_page} - for {fighter} via Google search(name)...')
+            number_of_failed_searches -= 1
+            return fighter_page
+    except Exception as e:
+        print(f'Google blocked requests....on {fighter}...')
+
 if __name__ == '__main__':
     #scrape_all_fighters('sherdog')
     #scrape_all_fighters(filename='fighters' ,filetype="json")
@@ -1019,4 +1068,12 @@ if __name__ == '__main__':
     #scrape_list_of_fighters(f_list, 'scraped_list', filetype='json')
     #scrape_list_of_fighters(ufc['men'], 'ufc-roster', filetype='json')
     ufc = scrape_ufc_roster(save='no', filetype=None)
-    scrape_list_of_fighters(ufc, 'ufc-roster', filetype='json')
+    scrape_list_of_fighters(ufc, 'ufc-roster-8', filetype='json')
+    #f_list = [('Da-un Jung', 'Light Heavyweight', '"Sseda"'), ('Serghei Spivac', 'Heavyweight', '"Polar Bear"'), ('Askar Askar', 'Bantamweight', 'NA'),
+    #f_list  = [('Aoriqileng', 'Flyweight', 'NA'), ('Serghei Spivac', 'Heavyweight', "Polar Bear"), ('Askar Askar', 'Bantamweight', 'NA'), ('Da-un Jung', 'Light Heavyweight', '"Sseda"')]
+    #f_list  = [('Askar Askar', 'Bantamweight', 'NA'), ('Da-un Jung', 'Light Heavyweight', '"Sseda"')]
+    #f_list = [('Da-un Jung', 'Light Heavyweight', '"Sseda"')]
+    #f_list = [('Steve Garcia', 'Featherweight', 'NA')]
+    #crape_list_of_fighters(f_list, 'ufc-roster-7', filetype='json')
+    #find_sherdog_url_with_google(('Jeffrey Molina', 'Flyweight', 'NA'))
+    #find_sherdog_url_with_google(('Askar Askar', 'Bantamweight', 'NA'))
