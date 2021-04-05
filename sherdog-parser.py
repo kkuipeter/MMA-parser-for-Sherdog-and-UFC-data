@@ -34,7 +34,6 @@ class Fighter(object):
         self.weight = None
         self.locality = None
         self.nationality = None
-        self.association = None
         self.weight_class = None
         self.wins = None
         self.losses = None
@@ -44,6 +43,10 @@ class Fighter(object):
         self.soup = None  # creating BeautifulSoup object, None by default
         self.pro_range = None  # selector: selecting range to pro fights exclusively, None by default
         self.validation = False  # boolean: confirms if scraped data for fighter instance is validated, False by default
+
+
+        self.association_names = None
+        self.association_urls = None
 
         # Information about all pro fights, which certain Fighter instance had.
 
@@ -178,19 +181,7 @@ class Fighter(object):
             self.nationality = nationality.get_text()
         except AttributeError:
             return AttributeError
-
-    def set_association(self):
-        """
-        Collects and sets association for Fighter instance.
-        :return: sets self.association to scraped string with fighter's gym association, returns AttributeError in case none was found
-        """
-        association = self.soup.find_all('span', itemprop='name') 
-        assosications = '/ '.join(map(lambda x: x.get_text(), association))
-        try:
-            self.association = assosications
-        except AttributeError:
-            return AttributeError
-
+    
     def set_weight_class(self):
         """
         Collects and sets weight_class for Fighter instance.
@@ -218,6 +209,27 @@ class Fighter(object):
                     self.no_contests = record_stats[3].get_text()
         except AttributeError:
             return AttributeError
+
+    def set_associations(self):
+        """
+        Collects and sets associations for Fighter instance.
+        :return: sets self.association to scraped string with fighter's gym association, returns AttributeError in case none was found
+        """
+        association_names = []
+        association_urls = []
+        try:
+            finder = self.soup.find_all('a', class_='association')
+            for result in finder:
+                association_name = result.find('span', itemprop="name").get_text()
+                association_url = result['href']
+                association_urls.append(association_url)
+                association_names.append(association_name)
+        except AttributeError:
+            logging.info(f'Attribute Error while grabbing result data for {self.name}, the data might be missing!')
+        else:
+            self.association_names = association_names
+            self.association_urls = association_urls
+            return association_names
 
     def grab_result_data(self):
         """
@@ -526,13 +538,26 @@ class Fighter(object):
         fighter_dictionary['weight'] = self.weight
         fighter_dictionary['locality'] = self.locality
         fighter_dictionary['nationality'] = self.nationality
-        fighter_dictionary['association'] = self.association
         fighter_dictionary['weightClass'] = self.weight_class
         fighter_dictionary['wins'] = self.wins
         fighter_dictionary['losses'] = self.losses
         fighter_dictionary['draws'] = self.draws
         fighter_dictionary['noContests'] = self.no_contests
+        fighter_dictionary['associations'] = []
         fighter_dictionary['fightHistoryPro'] = []
+
+        for association_index in range(len(self.association_names)):
+            try:
+                association_name = self.association_names[association_index]
+            except IndexError:
+                association_name = 'NA'
+            try:
+                association_url = self.association_urls[association_index]
+            except IndexError:
+                association_url = 'NA'
+            line = {'gymName': association_name, 'gymUrl' : association_url}
+            fighter_dictionary['associations'].append(line)
+
         #fighter_dictionary
         for index in range(len(self.result_data)):
             try:
@@ -602,9 +627,9 @@ class Fighter(object):
             self.set_weight()
             self.set_locality()
             self.set_nationality()
-            self.set_association()
             self.set_weight_class()
             self.set_wins_losses_draws_no_contests()
+            self.set_associations()
             self.set_pro_fights()
             self.grab_result_data()
             self.grab_opponents()
