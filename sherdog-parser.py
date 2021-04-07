@@ -18,6 +18,8 @@ allfighters = {'fighters' : []}
 missedFighters = ()
 number_of_failed_searches = 0
 MAX_THREADS = 30
+user_agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_1) AppleWebKit/602.2.14 (KHTML, like Gecko) Version/10.0.1 Safari/602.2.14'
+since_last_google_rq = 0.0
 
 
 class Fighter(object):
@@ -538,6 +540,7 @@ class Fighter(object):
         #fighters_dict = {'fighters' : []}
         fighter_dictionary = {}
 
+        fighter_dictionary['fighterUrl'] = self.url
         fighter_dictionary['name'] = self.name
         fighter_dictionary['nickName'] = self.nickName
         fighter_dictionary['gender'] = self.gender
@@ -615,6 +618,7 @@ class Fighter(object):
 
         #fighters_dict['fighters'].append(fighter_dictionary)
         allfighters['fighters'].append(fighter_dictionary)
+        print(f'Added {self.name} to fighter list')
 
     def scrape_fighter(self, filetype, filename, fighter_index=None, fighter_page=None):
         """
@@ -798,7 +802,7 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv', gender=None
     :param filetype: string with either 'csv' or 'json' as a type of file where results will be stored. Default is 'csv'
     :return: None
     """
-    number_of_women = None
+    number_of_women = 0
     if(gender and len(fighters_list) == 2):
         fighters_list = fighters_list[gender]
         if (gender == "women"):
@@ -875,6 +879,7 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv', gender=None
             F.gender = 'women'
         else:
             F.gender = gender
+        print(f"Created fighter {fighter_page}")
         F.scrape_fighter(filetype, filename, fighter_page=fighter_page)
 
     weight_classes = {
@@ -1008,7 +1013,9 @@ def scrape_list_of_fighters(fighters_list, filename, filetype='csv', gender=None
         
     with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
         executor.map(scrape_fighter_data, fighters_list)
-        
+    #for i in range(len(fighters_list)):
+    #    scrape_fighter_data(fighters_list[i])
+
     scrape_complete_time = time.time()
     print(f"\nScraping {len(fighters_list) - number_of_failed_searches} fighter's data from Sherdog completed in {round(scrape_complete_time-scrape_start_time,2)} seconds.")
     print(f"Failed to find {number_of_failed_searches} fighter in Sherdog.")
@@ -1035,14 +1042,26 @@ def helper_read_fighters_from_csv(filename, delimiter=','):
     return fighters_list
 
 def find_sherdog_url_with_google(fighter):
+    return None
+    #time.sleep(1.0) #TODO: figure out TIME to not get blocked by Google on search query 9 out of 50 get blocked
     global number_of_failed_searches
+    global since_last_google_rq
+    if(since_last_google_rq == 0.0):
+        since_last_google_rq = time.time()
+    print(since_last_google_rq)
+
+    print(time.time() - since_last_google_rq)
+    if(time.time() - since_last_google_rq < 5):
+        print("Sleeping 2 seconds...")
+        time.sleep(5.0)
+        since_last_google_rq = time.time()
     if(fighter[2] != "NA"):
         query = fighter[0] + " " + fighter[2] + " :site:sherdog.com/fighter"
     else:
         query = fighter[0] + " " + fighter[1] + " :site:sherdog.com/fighter"
 
     try:
-        for firstSearch in search(query, lang = "en", tld="com", num=1, stop=1, pause=2):
+        for firstSearch in search(query, lang = "en", tld="com", num=1, stop=1, pause=4, user_agent= user_agent):
             fighter_page = firstSearch.split("sherdog.com")[1]
             print(f'Found {fighter_page} - for {fighter} via Google search...')
             logging.info(f'Found {fighter_page} - for {fighter} via Google search...')
@@ -1051,7 +1070,7 @@ def find_sherdog_url_with_google(fighter):
 
         print("Didn't find google search result with nickname, now searching with only the name...")
         query = fighter[0] + " :site:sherdog.com/fighter"
-        for secondSearch in search(query, lang = "en", tld="com", num=1, stop=1, pause=2):
+        for secondSearch in search(query, lang = "en", tld="com", num=1, stop=1, pause=4, user_agent = user_agent):
             fighter_page = secondSearch.split("sherdog.com")[1]
             print(f'Found {fighter_page} - for {fighter} via Google search(name)...')
             logging.info(f'Found {fighter_page} - for {fighter} via Google search(name)...')
@@ -1064,17 +1083,17 @@ def find_sherdog_url_with_google(fighter):
 if __name__ == '__main__':
     #scrape_all_fighters('sherdog')
     #scrape_all_fighters(filename='fighters' ,filetype="json")
-    #f_list = [('Francis Ngannou', 'Heavyweight', 'NA'), ('Stipe Miocic', 'Heavyweight', 'NA')
-    #, ('Tim Means', 'Welterweight', 'NA'), ('Khabib Nurmagomedov', 'Lightweight', 'NA')]
+    f_list = [('Francis Ngannou', 'Heavyweight', 'NA'), ('Stipe Miocic', 'Heavyweight', 'NA')
+    , ('Tim Means', 'Welterweight', 'NA'), ('Khabib Nurmagomedov', 'Lightweight', 'NA')]
     #scrape_list_of_fighters(f_list, 'scraped_list', filetype='json')
     #scrape_list_of_fighters(ufc['men'], 'ufc-roster', filetype='json')
-    ufc = scrape_ufc_roster(save='no', filetype=None)
-    scrape_list_of_fighters(ufc, 'ufc-roster-8', filetype='json')
+    #ufc = scrape_ufc_roster(save='no', filetype=None)
+    #scrape_list_of_fighters(ufc, 'ufc-roster-9', filetype='json')
     #f_list = [('Da-un Jung', 'Light Heavyweight', '"Sseda"'), ('Serghei Spivac', 'Heavyweight', '"Polar Bear"'), ('Askar Askar', 'Bantamweight', 'NA'),
     #f_list  = [('Aoriqileng', 'Flyweight', 'NA'), ('Serghei Spivac', 'Heavyweight', "Polar Bear"), ('Askar Askar', 'Bantamweight', 'NA'), ('Da-un Jung', 'Light Heavyweight', '"Sseda"')]
     #f_list  = [('Askar Askar', 'Bantamweight', 'NA'), ('Da-un Jung', 'Light Heavyweight', '"Sseda"')]
     #f_list = [('Da-un Jung', 'Light Heavyweight', '"Sseda"')]
     #f_list = [('Steve Garcia', 'Featherweight', 'NA')]
-    #crape_list_of_fighters(f_list, 'ufc-roster-7', filetype='json')
+    scrape_list_of_fighters(f_list, 'ufc-roster-7', filetype='json')
     #find_sherdog_url_with_google(('Jeffrey Molina', 'Flyweight', 'NA'))
     #find_sherdog_url_with_google(('Askar Askar', 'Bantamweight', 'NA'))
